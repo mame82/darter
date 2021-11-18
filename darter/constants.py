@@ -4,7 +4,7 @@ import json
 import os.path
 
 
-EXPECTED_VERSION = 'c8562f0ee0ebc38ba217c7955956d1cb'
+EXPECTED_VERSION = '9cf77f4405212c45daf608e1cd646852'
 
 MAGIC_VALUE = 0xdcdcf5f5
 
@@ -13,7 +13,8 @@ kSectionMarker = 0xABAB
 kMaxPreferredCodeAlignment = 32
 
 # as an exception, kClassId names are stripped of k- and -Cid (except items 2 and 3: kFreeListElement, kForwardingCorpse)
-with open(os.path.join(os.path.dirname(__file__), 'data', 'class_ids.json')) as f:
+# https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/class_id.h
+with open(os.path.join(os.path.dirname(__file__), 'data', 'class_ids_4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3.json')) as f:
     kClassId = json.load(f)
 kkClassId = { k: v for (v, k) in enumerate(kClassId) }
 assert len(kClassId) == len(kkClassId)
@@ -39,10 +40,10 @@ isTypedDataView = lambda x: __isBase(x, kTypedDataCidRemainderView) or x == kByt
 isExternalTypedData = lambda x: __isBase(x, kTypedDataCidRemainderExternal)
 
 kKind = [
-    ('kFull', "Full snapshot of core libraries or an application"),
+    ('kFull', "Full snapshot of an application"),
+    ('kFullCore', "Full snapshot of core libraries. Agnostic to null safety."),
     ('kFullJIT', "Full + JIT code"),
     ('kFullAOT', "Full + AOT code"),
-    ('kMessage', "A partial snapshot used only for isolate messaging"),
     ('kNone', "gen_snapshot"),
     ('kInvalid', None),
 ]
@@ -68,7 +69,10 @@ with open(os.path.join(os.path.dirname(__file__), 'data', 'runtime_offsets.json'
 # runtime/vm/dart_entry.h
 kCachedDescriptorCount = 32
 # runtime/vm/object.h
-kCachedICDataArrayCount = 4
+kCachedICDataZeroArgTestedWithoutExactnessTrackingIdx = 0
+kCachedICDataMaxArgsTestedWithoutExactnessTracking = 2
+kCachedICDataOneArgWithExactnessTrackingIdx = kCachedICDataZeroArgTestedWithoutExactnessTrackingIdx + kCachedICDataMaxArgsTestedWithoutExactnessTracking + 1
+kCachedICDataArrayCount = kCachedICDataOneArgWithExactnessTrackingIdx + 1
 
 
 ### Entry points

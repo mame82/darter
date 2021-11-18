@@ -65,7 +65,6 @@ def make_cluster_handlers(s):
     # Handlers
 
     class HandlerStore:
-
         class TypedData(Handler):
             do_read_from = False
             type_associations = {
@@ -79,6 +78,7 @@ def make_cluster_handlers(s):
                 'Uint64': (8, 'Q'),
             }
             def __init__(self, cid):
+                # m = re.fullmatch('(External)?TypedData(.+)Array', kClassId[cid])
                 m = re.fullmatch('(External)?TypedData(.+)Array', kClassId[cid])
                 self.external = bool(m.group(1))
                 element_size, parse_char = self.type_associations[m.group(2)]
@@ -366,14 +366,14 @@ def make_cluster_handlers(s):
                     return { 'tags': tags, 'hash': hash_, 'value': value }
         else:
             # FIXME: verify this works
-            class OneByteString(LengthHandler):
+            class OneByteString(LengthHandler):  # type: ignore
                 do_read_from = False
                 def fill(self, f, x, ref):
                     length = readuint(f)
                     x['canonical'] = read1(f)
                     x['hash'] = readuint(f, 32)
                     x['value'] = "".join(chr(x) for x in f.read(length))
-            class TwoByteString(LengthHandler):
+            class TwoByteString(LengthHandler):  # type: ignore
                 do_read_from = False
                 def fill(self, f, x, ref):
                     length = readuint(f)

@@ -3,3 +3,7 @@ __pycache__
 .ipynb_checkpoints
 
 /darter/settings.py
+libapp.so
+libflutter.so
+notes.md
+test.py

@@ -172,7 +172,7 @@ class Snapshot:
     """
 
     def __init__(self, data, instructions=None, vm=False, base=None,
-        data_offset=0, instructions_offset=0, print_level=3,
+        data_offset=0, instructions_offset=0, print_level=4,
         strict=True, parse_rodata=True, parse_csm=True, build_tables=True):
         """ Initialize a parser.
         
@@ -439,7 +439,9 @@ class Snapshot:
     def read_cluster(self):
         ''' Reads the alloc section of a new cluster '''
         cid = readcid(self.data)
+
         self.debug('reading cluster with cid={}'.format(format_cid(cid)))
+
         if cid >= kNumPredefinedCids:
             handler = 'Instance'
         elif isTypedData(cid) or isExternalTypedData(cid):
