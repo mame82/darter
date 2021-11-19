@@ -30,6 +30,11 @@ def readuint(f, bits=64, signed=False):
 def readint(f, bits=64):
     return readuint(f, bits, signed=True)
 
+def readCint(f, bits=64):
+    u = readuint(f, bits, signed=False)
+    u = (1 << bits) if (u & (1 << (bits-1)) > 0) else u
+    return u
+
 readcid = lambda f: readint(f, 32)
 read1 = lambda f: { 0: False, 1: True}[f.read(1)[0]]
 readtokenposition = lambda f: readint(f, 32)

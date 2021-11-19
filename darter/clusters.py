@@ -1,5 +1,6 @@
 # CLUSTERS: Stores the deserialization logic for every kind of cluster (used by CORE)
 
+from io import BytesIO
 from struct import unpack
 import re
 
@@ -45,17 +46,32 @@ def make_cluster_handlers(s):
     
     class LengthHandler(Handler):
         def alloc(self, f, cluster):
-            for _ in range(readuint(f)): allocref(cluster, { 'length': readuint(f) })
+            count = readuint(f)
+            print("count: {}".format(count))
+            for _ in range(count): 
+                length = readuint(f)
+                # print("length: {}".format(length))
+                allocref(cluster, { 'length': length })
     
     class RODataHandler(Handler):
         do_read_from = False
+        
+        # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L2782-L2795
         def alloc(self, f, cluster):
-            for _ in range(readuint(f)):
-                allocref(cluster, { 'offset': readuint(f), 'shared': True }) # FIXME implement
+            count = readuint(f)
+            
+            #for _ in range(count):
+            #    allocref(cluster, { 'offset': readuint(f), 'shared': True }) # FIXME implement
             running_offset = 0
             for _ in range(readuint(f)):
                 running_offset += readuint(f) << kObjectAlignmentLog2
                 allocref(cluster, self.try_parse_object(running_offset))
+            # if cluster CID == kStringCid: https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L615-L629
+            if cluster['cid'] == kkClassId['String']:
+                table_length = readuint(f)
+                first_element = readuint(f)
+                print("first_element={} table_length={}".format(first_element, table_length))
+
         def try_parse_object(self, offset):
             if not parse_rodata: return { 'offset': rodata_offset + offset }
             rodata.seek(offset)
@@ -77,8 +93,7 @@ def make_cluster_handlers(s):
                 'Int64': (8, 'q'),
                 'Uint64': (8, 'Q'),
             }
-            def __init__(self, cid):
-                # m = re.fullmatch('(External)?TypedData(.+)Array', kClassId[cid])
+            def __init__(self, cid, external=False):
                 m = re.fullmatch('(External)?TypedData(.+)Array', kClassId[cid])
                 self.external = bool(m.group(1))
                 element_size, parse_char = self.type_associations[m.group(2)]
@@ -86,8 +101,10 @@ def make_cluster_handlers(s):
                 self.parse_func = lambda f, count: [ elem(f) for _ in range(count) ]
                 # Optimization: if Uint8 array, we can just read bytes
                 if parse_char == 'B': self.parse_func = lambda f, count: f.read(count)
+            
             def alloc(self, f, cluster):
                 return (SimpleHandler if self.external else LengthHandler).alloc(self, f, cluster)
+            
             def fill(self, f, x, ref):
                 count = readuint(f)
                 if self.external:
@@ -127,11 +144,17 @@ def make_cluster_handlers(s):
 
         class Instance(Handler):
             do_read_from = False
+
+            # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L3639
             def alloc(self, f, cluster):
                 count = readuint(f)
-                cluster['next_field_offset_in_words'] = readint(f, 32)
-                cluster['instance_size_in_words'] = readint(f, 32)
+                # print("!!Instance deserialization - count: {}".format(count))
+                cluster['next_field_offset_in_words'] = readCint(f, 32)
+                cluster['instance_size_in_words'] = readCint(f, 32)
+                # print(cluster)
                 for _ in range(count): allocref(cluster, {})
+            
+            
             def fill(self, f, x, ref):
                 x['canonical'] = read1(f)
                 count = ref.cluster['next_field_offset_in_words'] - raw_instance_size_in_words
@@ -348,6 +371,9 @@ def make_cluster_handlers(s):
             def fill(self, f, x, ref): pass
         
         if includes_code:
+            class String(RODataHandler):
+                def parse_object(self, f):
+                    pass
             class OneByteString(RODataHandler):
                 def parse_object(self, f):
                     if is_64:

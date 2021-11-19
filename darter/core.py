@@ -231,7 +231,7 @@ class Snapshot:
         self.initialize_settings()
         self.initialize_clusters()
         self.initialize_references()
-        
+
         self.info('Reading allocation clusters...')
         self.clusters = [ self.read_cluster() for _ in range(self.num_clusters) ]
         if self.refs['next']-1 != self.num_objects:
@@ -304,6 +304,7 @@ class Snapshot:
             self.warning('Invalid magic value: {:08x}'.format(self.magic_value))
         self.p(1, "[Header]\n  length = {}\n  kind = {} {}\n".format(self.length, self.kind, kKind[self.kind]), show_offset=False)
 
+        # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/snapshot.h#L68L70
         self.includes_code = self.kind in {kkKind['kFullJIT'], kkKind['kFullAOT']}
         self.includes_bytecode = self.kind in {kkKind['kFull'], kkKind['kFullJIT']}
 
@@ -334,9 +335,14 @@ class Snapshot:
             self.warning("Snapshot header doesn't match with base snapshot!")
 
         # Parse counts
-        self.num_base_objects, self.num_objects, self.num_clusters, self.code_order_length = (readuint(f) for _ in range(4))
-        self.p(1, "  base objects: {}\n  objects: {}\n  clusters: {}\n  code order length = {}\n".format(
-            self.num_base_objects, self.num_objects, self.num_clusters, self.code_order_length), show_offset=False)
+        # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L7748
+        self.num_base_objects = readuint(f)
+        self.num_objects = readuint(f)
+        self.num_clusters = readuint(f)
+        self.initial_field_table_len = readuint(f)
+        self.instructions_table_len = readuint(f)
+        self.p(1, "  base objects: {}\n  objects: {}\n  clusters: {}\n  initial_field_table_len = {}\n  instructions_table_len = {}\n".format(
+            self.num_base_objects, self.num_objects, self.num_clusters, self.initial_field_table_len, self.instructions_table_len), show_offset=False)
 
     # FIXME: let user override settings, too
     def initialize_settings(self):
@@ -438,27 +444,30 @@ class Snapshot:
 
     def read_cluster(self):
         ''' Reads the alloc section of a new cluster '''
-        cid = readcid(self.data)
+        # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L7230
+        cid_and_canonical = readuint(self.data, 64, signed=True)
+        cid = (cid_and_canonical >> 1) & kMaxUint32
+        is_canonical = (cid_and_canonical & 0x1) == 0x1
+        self.debug('reading cluster with cid={} ({}, is_canonical={})'.format(format_cid(cid), cid, is_canonical))
 
-        self.debug('reading cluster with cid={}'.format(format_cid(cid)))
-
-        if cid >= kNumPredefinedCids:
+        if cid >= kNumPredefinedCids or cid == kkClassId["Instance"]:
             handler = 'Instance'
-        elif isTypedData(cid) or isExternalTypedData(cid):
-            handler = 'TypedData'
         elif isTypedDataView(cid):
             handler = 'TypedDataView'
+        elif isTypedData(cid) or isExternalTypedData(cid):
+            handler = 'TypedData'
         elif cid == kkClassId['ImmutableArray']:
             handler = 'Array'
         else:
             handler = kClassId[cid]
-        cluster = { 'handler': handler, 'cid': cid }
+        cluster = { 'handler': handler, 'cid': cid, 'is_canonical': is_canonical }
         if not hasattr(self.handlers, handler):
             raise ParseError(self.data_offset + self.data.tell(), 'Cluster "{}" still not implemented'.format(handler))
         getattr(self.handlers, handler)(cid).alloc(self.data, cluster)
         
+        # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L7808
         if self.is_debug:
-            serializers_next_ref_index = readint(f, 32)
+            serializers_next_ref_index = readCint(f, 32)
             self.warning('next_ref doesn\'t match, expected {} but got {}'.format(serializers_next_ref_index, refs['next']))
         return cluster
 

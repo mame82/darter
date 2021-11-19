@@ -8,6 +8,7 @@ EXPECTED_VERSION = '9cf77f4405212c45daf608e1cd646852'
 
 MAGIC_VALUE = 0xdcdcf5f5
 
+kMaxUint32 = 0xFFFFFFFF
 kSectionMarker = 0xABAB
 
 kMaxPreferredCodeAlignment = 32
@@ -39,6 +40,7 @@ isTypedData = lambda x: __isBase(x, kTypedDataCidRemainderInternal)
 isTypedDataView = lambda x: __isBase(x, kTypedDataCidRemainderView) or x == kByteDataViewCid
 isExternalTypedData = lambda x: __isBase(x, kTypedDataCidRemainderExternal)
 
+# https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/snapshot.h#L24
 kKind = [
     ('kFull', "Full snapshot of an application"),
     ('kFullCore', "Full snapshot of core libraries. Agnostic to null safety."),
