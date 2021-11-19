@@ -13,6 +13,9 @@ kSectionMarker = 0xABAB
 
 kMaxPreferredCodeAlignment = 32
 
+# runtime/vm/pointer_tagging.h
+kHeapObjectTag = 1
+
 # as an exception, kClassId names are stripped of k- and -Cid (except items 2 and 3: kFreeListElement, kForwardingCorpse)
 # https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/class_id.h
 with open(os.path.join(os.path.dirname(__file__), 'data', 'class_ids_4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3.json')) as f:

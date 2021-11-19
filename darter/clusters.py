@@ -62,15 +62,34 @@ def make_cluster_handlers(s):
             
             #for _ in range(count):
             #    allocref(cluster, { 'offset': readuint(f), 'shared': True }) # FIXME implement
+            print("RODataHandler: count={}".format(count))
             running_offset = 0
-            for _ in range(readuint(f)):
+            for i in range(count):
                 running_offset += readuint(f) << kObjectAlignmentLog2
-                allocref(cluster, self.try_parse_object(running_offset))
+                # print("'RODataDeserializationCluster::ReadAlloc': d->GetObjectAt({})".format(running_offset))
+                object_val = self.try_parse_object(running_offset)
+                # print("parsed_object {}: {}".format(i, object_val))
+                allocref(cluster, object_val)
+                
             # if cluster CID == kStringCid: https://github.com/dart-lang/sdk/blob/4c8a4f0d7ad055fa7dea5e80862cd2074f4454d3/runtime/vm/clustered_snapshot.cc#L615-L629
             if cluster['cid'] == kkClassId['String']:
-                table_length = readuint(f)
-                first_element = readuint(f)
-                print("first_element={} table_length={}".format(first_element, table_length))
+                # BuildCanonicalSetFromLayout
+                if cluster['is_canonical']:
+                    table_length = readuint(f)
+                    first_element = readuint(f)
+                    print("first_element={} table_length={}".format(first_element, table_length))
+
+                    table=list([0 for _ in range(table_length)])
+
+                    table_pos = first_element
+                    for i in range(count):
+                        table_FillGap=readuint(f)
+                        table_pos += table_FillGap
+                        r = cluster["refs"][i]
+                        table[table_pos] = r
+                        table_pos += 1
+                        #print("fillgap length {}: {} , {}".format(i, table_FillGap, r))
+                    # print("table_pos: {}".format(table_pos))
 
         def try_parse_object(self, offset):
             if not parse_rodata: return { 'offset': rodata_offset + offset }
@@ -151,7 +170,6 @@ def make_cluster_handlers(s):
                 # print("!!Instance deserialization - count: {}".format(count))
                 cluster['next_field_offset_in_words'] = readCint(f, 32)
                 cluster['instance_size_in_words'] = readCint(f, 32)
-                # print(cluster)
                 for _ in range(count): allocref(cluster, {})
             
             
@@ -173,7 +191,7 @@ def make_cluster_handlers(s):
             do_read_from = False
             def alloc(self, f, cluster):
                 for _ in range(readuint(f)):
-                    allocref(cluster, { 'canonical': read1(f), 'value': readint(f, 64) })
+                    allocref(cluster, { 'value': readint(f, 64) })
             def fill(self, f, x, ref): pass
 
         class PatchClass(SimpleHandler):
@@ -235,9 +253,29 @@ def make_cluster_handlers(s):
                 if not is_precompiled:
                     x['binary_declaration'] = readuint(f,32)
 
-        class Code(SimpleHandler):
+        class Code(Handler):
+            # clusterd_sanpshot.cc#L2107
+            def alloc(self, f, cluster):
+                count = readuint(f)
+                for i in range(count): 
+                    state_bits = readint(f, bits=32)
+                    #print("code {} statebits: {}".format(i, hex(state_bits)))
+                    allocref(cluster, {'state_bits': state_bits})
+                deferred_count = readuint(f)
+                for i in range(deferred_count): 
+                    state_bits = readint(f, bits=32)
+                    print("code {} statebits: {}".format(i, hex(state_bits)))
+                    allocref(cluster, {})
+
             def fill(self, f, x, ref):
-                x['state_bits'] = readint(f, 32)
+                # x['state_bits'] = readint(f, 32)
+                pass
+
+        class FunctionType(SimpleHandler):
+            # clusterd_sanpshot.cc#L2107
+
+            def fill(self, f, x, ref):
+                pass
 
         class ObjectPool(LengthHandler):
             do_read_from = False
@@ -372,8 +410,22 @@ def make_cluster_handlers(s):
         
         if includes_code:
             class String(RODataHandler):
+                # runtime/vm/clustered_snapshot#L2778 --> Deserializer::GetObjectAt --> ImageReader::GetObjectAt
+                # --> UntaggedObject::FromAddress (f is BytesIO pointing to rodata, already seeked to correct offset address)
                 def parse_object(self, f):
-                    pass
+                    addr = f.tell()
+                    # UntaggedObject::FromAddress (/runtime/vm/raw_object.h)
+                    objPtr = addr + kHeapObjectTag
+                    # v1,length,v3 = unpack('<LLL', f.read(12)) # SMI values
+                    v1 = read_smi(f)
+                    length = read_smi(f)
+                    v3 = read_smi(f)
+                    value = f.read(length)
+
+                    res = {'objPtr': objPtr, 'v1': v1, 'length': length, 'v3': v3, 'value': value}
+                    print("parsed 'String': {}".format(res))
+                    return res
+
             class OneByteString(RODataHandler):
                 def parse_object(self, f):
                     if is_64:

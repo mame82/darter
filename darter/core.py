@@ -475,7 +475,7 @@ class Snapshot:
         ''' Reads the fill section of the passed cluster '''
         f = self.data
         cid, name = cluster['cid'], cluster['handler']
-        self.debug('reading cluster with cid={}'.format(format_cid))
+        self.debug('reading cluster with cid={}'.format(format_cid(cid)))
         handler = getattr(self.handlers, name)(cid)
         if refs is None: refs = cluster['refs']
         for ref in refs:

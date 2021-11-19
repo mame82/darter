@@ -1,6 +1,7 @@
 # READING PRIMITIVES
 
 from struct import unpack, pack
+import struct
 
 
 def readcstr(f):
@@ -53,3 +54,6 @@ def read_uleb128(f):
         if not (b & 0x80): break
         s += 7
     return x
+
+def read_smi(f):
+    return struct.unpack('<L', f.read(4))[0] >> 1
